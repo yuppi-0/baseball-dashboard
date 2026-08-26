@@ -44,20 +44,17 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: 対象日付を計算（米国東部時間の「完了済みの前日」を狙う）
+      - name: 対象日付を計算
         id: date
         if: steps.pause.outputs.skip != 'true'
         run: |
           if [ -n "${{ inputs.date }}" ]; then
             TARGET="${{ inputs.date }}"
           else
-            HOUR=$(TZ='Asia/Tokyo' date +%H)
-            if [ "$HOUR" -lt 12 ]; then
-              # 19:00予定の実行が深夜〜正午前までずれ込んだ場合は、さらに1日前を狙う
-              TARGET=$(TZ='Asia/Tokyo' date -d '2 days ago' +%Y-%m-%d)
-            else
-              TARGET=$(TZ='Asia/Tokyo' date -d 'yesterday' +%Y-%m-%d)
-            fi
+            # run_mlb.py 側が内部で「date-1日」のStatcastを取得し「date」ラベルで
+            # 保存する時差調整ロジックを既に持っているため、ここでは前日にずらさず
+            # 日本時間の「今日」をそのまま渡す（実行が多少遅延しても同じ考え方でよい）。
+            TARGET=$(TZ='Asia/Tokyo' date +%Y-%m-%d)
           fi
           echo "date=$TARGET" >> "$GITHUB_OUTPUT"
           echo "対象日: $TARGET"

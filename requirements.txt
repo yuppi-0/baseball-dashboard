@@ -5,3 +5,4 @@ numpy
 openpyxl
 google-generativeai
 pybaseball
+python-dotenv

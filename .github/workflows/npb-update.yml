@@ -2,8 +2,12 @@ name: NPBデータ自動更新
 
 on:
   schedule:
-    # UTC 14:00 = 日本時間 23:00
-    - cron: '0 14 * * *'
+    # UTC 13:30/14:30/15:30 = 日本時間 22:30/23:30/翌0:30
+    # 22:30が発火しなかった/失敗した場合の再試行として23:30・翌0:30を用意。
+    # 既に当日分がコミット済みなら「重複実行チェック」で自動的に何もせず終わる。
+    - cron: '30 13 * * *'
+    - cron: '30 14 * * *'
+    - cron: '30 15 * * *'
   workflow_dispatch:
     inputs:
       date:
@@ -17,6 +21,11 @@ on:
 
 permissions:
   contents: write
+
+# 同じワークフローの多重実行を防ぐ。前の実行が終わるまで次のトリガーは待機する
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   update-npb:
@@ -53,7 +62,7 @@ jobs:
           else
             HOUR=$(TZ='Asia/Tokyo' date +%H)
             if [ "$HOUR" -lt 12 ]; then
-              # 23:00予定の実行が深夜〜正午前にずれ込んだ場合は「前日」として扱う
+              # 22:30予定の実行が深夜〜正午前にずれ込んだ場合は「前日」として扱う
               TARGET=$(TZ='Asia/Tokyo' date -d 'yesterday' +%Y-%m-%d)
             else
               TARGET=$(TZ='Asia/Tokyo' date +%Y-%m-%d)
@@ -70,7 +79,7 @@ jobs:
           if [ "${{ github.event_name }}" = "schedule" ]; then
             LAST_MSG=$(git log -1 --pretty=%s)
             if echo "$LAST_MSG" | grep -q "NPB自動更新(2軍): ${{ steps.date.outputs.date }}"; then
-              echo "手動実行で既に ${{ steps.date.outputs.date }} 分は処理済みのためスキップします"
+              echo "既に ${{ steps.date.outputs.date }} 分は処理済みのためスキップします"
               SKIP=true
             fi
           fi

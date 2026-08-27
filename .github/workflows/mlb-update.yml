@@ -2,8 +2,12 @@ name: MLBデータ自動更新
 
 on:
   schedule:
-    # UTC 10:00 = 日本時間 19:00
+    # UTC 10:00/11:00/12:00 = 日本時間 19:00/20:00/21:00
+    # 19:00が発火しなかった/失敗した場合の再試行として20:00・21:00を用意。
+    # 既に当日分がコミット済みなら「重複実行チェック」で自動的に何もせず終わる。
     - cron: '0 10 * * *'
+    - cron: '0 11 * * *'
+    - cron: '0 12 * * *'
   workflow_dispatch:
     inputs:
       date:
@@ -17,6 +21,11 @@ on:
 
 permissions:
   contents: write
+
+# 同じワークフローの多重実行を防ぐ。前の実行が終わるまで次のトリガーは待機する
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   update-mlb:
@@ -53,7 +62,7 @@ jobs:
           else
             # run_mlb.py 側が内部で「date-1日」のStatcastを取得し「date」ラベルで
             # 保存する時差調整ロジックを既に持っているため、ここでは前日にずらさず
-            # 日本時間の「今日」をそのまま渡す（実行が多少遅延しても同じ考え方でよい）。
+            # 日本時間の「今日」をそのまま渡す。
             TARGET=$(TZ='Asia/Tokyo' date +%Y-%m-%d)
           fi
           echo "date=$TARGET" >> "$GITHUB_OUTPUT"
@@ -67,7 +76,7 @@ jobs:
           if [ "${{ github.event_name }}" = "schedule" ]; then
             LAST_MSG=$(git log -1 --pretty=%s)
             if echo "$LAST_MSG" | grep -q "MLB自動更新: ${{ steps.date.outputs.date }}"; then
-              echo "手動実行で既に ${{ steps.date.outputs.date }} 分は処理済みのためスキップします"
+              echo "既に ${{ steps.date.outputs.date }} 分は処理済みのためスキップします"
               SKIP=true
             fi
           fi
@@ -138,7 +147,6 @@ jobs:
             echo "更新なし（データ変化なし）"
           else
             git commit -m "MLB自動更新: ${{ steps.date.outputs.date }} (steps: ${{ inputs.steps || 'all' }})"
-            # 他のワークフロー/手動pushと競合した場合に備え、リトライ付きでpushする
             for i in 1 2 3 4 5; do
               if git push; then
                 break
